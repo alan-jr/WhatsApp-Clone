@@ -1,0 +1,610 @@
+"use client"
+
+import type React from "react"
+
+import { useState, useRef, useEffect } from "react"
+import { ArrowLeft, MoreVertical, Search, Phone, Video, Star, Trash } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useWhatsApp } from "@/context/whatsapp-context"
+import { useRouter } from "next/navigation"
+import { useToast } from "@/hooks/use-toast"
+
+interface ChatAreaProps {
+  chatId: string
+  onBackClick: () => void
+  onShowContactInfo: () => void
+}
+
+export default function ChatArea({ chatId, onBackClick, onShowContactInfo }: ChatAreaProps) {
+  const { chats, sendMessage, addCall, theme, deleteMessage, starMessage, unstarMessage, clearMessages, deleteChat, toggleMuteChat } = useWhatsApp();
+  const [newMessage, setNewMessage] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+  const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const { toast } = useToast();
+  
+  const chat = chats[chatId];
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [chat?.messages]);
+
+  const handleSendMessage = () => {
+    if (newMessage.trim()) {
+      sendMessage(chatId, newMessage);
+      setNewMessage("");
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  const handleCall = (type: 'audio' | 'video') => {
+    // Add call to history
+    const newCall = {
+      id: `call-${Date.now()}`,
+      name: chat.name,
+      avatar: chat.avatar,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      type: "outgoing",
+      callType: type,
+      missed: false
+    };
+    
+    addCall(newCall);
+    
+    // Show toast notification
+    toast({
+      title: `${type.charAt(0).toUpperCase() + type.slice(1)} Call`,
+      description: `Calling ${chat.name}...`,
+    });
+  };
+
+  const handleMessageAction = (messageId: string, action: 'star' | 'unstar' | 'delete') => {
+    if (action === 'star') {
+      starMessage(chatId, messageId);
+      toast({
+        title: "Message starred",
+        description: "Message added to starred messages"
+      });
+    } else if (action === 'unstar') {
+      unstarMessage(chatId, messageId);
+      toast({
+        title: "Message unstarred",
+        description: "Message removed from starred messages"
+      });
+    } else if (action === 'delete') {
+      deleteMessage(chatId, messageId);
+      toast({
+        title: "Message deleted",
+        description: "Message has been deleted"
+      });
+    }
+  };
+
+  const handleClearMessages = () => {
+    clearMessages(chatId);
+    toast({
+      title: "Chat cleared",
+      description: "All messages have been cleared"
+    });
+  };
+
+  const handleDeleteChat = () => {
+    deleteChat(chatId);
+    toast({
+      title: "Chat deleted",
+      description: "Chat has been deleted"
+    });
+    onBackClick();
+  };
+
+  const handleToggleMute = () => {
+    toggleMuteChat(chatId);
+    toast({
+      title: chat.muted ? "Chat unmuted" : "Chat muted",
+      description: chat.muted ? "You will now receive notifications" : "Notifications are now muted"
+    });
+  };
+
+  const toggleMessageSelection = (messageId: string) => {
+    if (selectedMessages.includes(messageId)) {
+      setSelectedMessages(prev => prev.filter(id => id !== messageId));
+    } else {
+      setSelectedMessages(prev => [...prev, messageId]);
+    }
+  };
+
+  const handleBulkAction = (action: 'star' | 'delete') => {
+    selectedMessages.forEach(messageId => {
+      if (action === 'star') {
+        starMessage(chatId, messageId);
+      } else if (action === 'delete') {
+        deleteMessage(chatId, messageId);
+      }
+    });
+    
+    toast({
+      title: action === 'star' ? "Messages starred" : "Messages deleted",
+      description: action === 'star' 
+        ? "Selected messages added to starred messages" 
+        : "Selected messages have been deleted"
+    });
+    
+    setSelectedMessages([]);
+    setIsSelectionMode(false);
+  };
+
+  if (!chat) {
+    return <div className={`flex-grow ${theme === 'light' ? 'bg-gray-200' : 'bg-[#222e35]'} flex items-center justify-center`}>Chat not found</div>;
+  }
+
+  const bgColor = theme === 'light' ? 'bg-[#efeae2]' : 'bg-[#0b141a]';
+  const headerBgColor = theme === 'light' ? 'bg-[#f0f2f5]' : 'bg-[#202c33]';
+  const inputBgColor = theme === 'light' ? 'bg-white' : 'bg-[#2a3942]';
+  const textColor = theme === 'light' ? 'text-gray-800' : 'text-[#e9edef]';
+  const secondaryTextColor = theme === 'light' ? 'text-gray-600' : 'text-[#8696a0]';
+  const myMessageBgColor = theme === 'light' ? 'bg-[#d9fdd3]' : 'bg-[#005c4b]';
+  const theirMessageBgColor = theme === 'light' ? 'bg-white' : 'bg-[#202c33]';
+
+  return (
+    <div className={`flex flex-col h-full ${bgColor}`}>
+      {/* Header */}
+      <div className={`flex items-center p-2 ${headerBgColor}`}>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="md:hidden mr-1 text-[#aebac1]"
+          onClick={onBackClick}
+        >
+          <ArrowLeft size={24} />
+        </Button>
+        <div 
+          className="flex items-center flex-1 cursor-pointer"
+          onClick={onShowContactInfo}
+        >
+          <Avatar className="h-10 w-10 mr-3">
+            <AvatarImage src={chat.avatar} alt={chat.name} />
+            <AvatarFallback>{chat.name.substring(0, 2)}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1">
+            <div className={`font-medium ${textColor}`}>{chat.name}</div>
+            <div className={`text-xs ${secondaryTextColor}`}>{chat.online}</div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="rounded-full text-[#aebac1]"
+            onClick={() => handleCall('video')}
+          >
+            <Video size={20} />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="rounded-full text-[#aebac1]"
+            onClick={() => handleCall('audio')}
+          >
+            <Phone size={20} />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="rounded-full text-[#aebac1]"
+            onClick={() => setShowSearch(true)}
+          >
+            <Search size={20} />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full text-[#aebac1]">
+                <MoreVertical size={20} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className={`${theme === 'light' ? 'bg-white text-gray-800' : 'bg-[#233138] text-[#d1d7db]'} border-none`}>
+              <DropdownMenuItem 
+                className={`${theme === 'light' ? 'focus:bg-gray-100' : 'focus:bg-[#182229]'}`}
+                onClick={onShowContactInfo}
+              >
+                Contact info
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className={`${theme === 'light' ? 'focus:bg-gray-100' : 'focus:bg-[#182229]'}`}
+                onClick={() => setIsSelectionMode(true)}
+              >
+                Select messages
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className={`${theme === 'light' ? 'focus:bg-gray-100' : 'focus:bg-[#182229]'}`}
+                onClick={onBackClick}
+              >
+                Close chat
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className={`${theme === 'light' ? 'focus:bg-gray-100' : 'focus:bg-[#182229]'}`}
+                onClick={handleToggleMute}
+              >
+                {chat.muted ? 'Unmute notifications' : 'Mute notifications'}
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className={`${theme === 'light' ? 'focus:bg-gray-100' : 'focus:bg-[#182229]'}`}
+                onClick={handleClearMessages}
+              >
+                Clear messages
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className={`${theme === 'light' ? 'focus:bg-gray-100' : 'focus:bg-[#182229]'}`}
+                onClick={handleDeleteChat}
+              >
+                Delete chat
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+      
+      {/* Selection mode header */}
+      {isSelectionMode && (
+        <div className={`flex items-center p-2 ${headerBgColor}`}>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="mr-1 text-[#aebac1]"
+            onClick={() => {
+              setIsSelectionMode(false);
+              setSelectedMessages([]);
+            }}
+          >
+            <ArrowLeft size={24} />
+          </Button>
+          <div className={`flex-1 ${textColor}`}>
+            {selectedMessages.length} selected
+          </div>
+          <div className="flex gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="rounded-full text-[#aebac1]"
+              onClick={() => handleBulkAction('star')}
+              disabled={selectedMessages.length === 0}
+            >
+              <Star size={20} />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="rounded-full text-[#aebac1]"
+              onClick={() => handleBulkAction('delete')}
+              disabled={selectedMessages.length === 0}
+            >
+              <Trash size={20} />
+            </Button>
+          </div>
+        </div>
+      )}
+      
+      {/* Messages */}
+      <div
+        className="flex-1 overflow-y-auto p-3 bg-repeat"
+        style={{
+          backgroundImage: theme === 'light'
+"use client"
+
+import type React from "react"
+
+import { useState, useRef, useEffect } from "react"
+import { ArrowLeft, MoreVertical, Search, Phone, Video, Star, Trash } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useWhatsApp } from "@/context/whatsapp-context"
+import { useRouter } from "next/navigation"
+import { useToast } from "@/hooks/use-toast"
+
+interface ChatAreaProps {
+  chatId: string
+  onBackClick: () => void
+  onShowContactInfo: () => void
+}
+
+export default function ChatArea({ chatId, onBackClick, onShowContactInfo }: ChatAreaProps) {
+  const { chats, sendMessage, addCall, theme, deleteMessage, starMessage, unstarMessage, clearMessages, deleteChat, toggleMuteChat } = useWhatsApp();
+  const [newMessage, setNewMessage] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+  const [selectedMessages, setSelectedMessages] = useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const { toast } = useToast();
+  
+  const chat = chats[chatId];
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [chat?.messages]);
+
+  const handleSendMessage = () => {
+    if (newMessage.trim()) {
+      sendMessage(chatId, newMessage);
+      setNewMessage("");
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  const handleCall = (type: 'audio' | 'video') => {
+    // Add call to history
+    const newCall = {
+      id: `call-${Date.now()}`,
+      name: chat.name,
+      avatar: chat.avatar,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      type: "outgoing",
+      callType: type,
+      missed: false
+    };
+    
+    addCall(newCall);
+    
+    // Show toast notification
+    toast({
+      title: `${type.charAt(0).toUpperCase() + type.slice(1)} Call`,
+      description: `Calling ${chat.name}...`,
+    });
+  };
+
+  const handleMessageAction = (messageId: string, action: 'star' | 'unstar' | 'delete') => {
+    if (action === 'star') {
+      starMessage(chatId, messageId);
+      toast({
+        title: "Message starred",
+        description: "Message added to starred messages"
+      });
+    } else if (action === 'unstar') {
+      unstarMessage(chatId, messageId);
+      toast({
+        title: "Message unstarred",
+        description: "Message removed from starred messages"
+      });
+    } else if (action === 'delete') {
+      deleteMessage(chatId, messageId);
+      toast({
+        title: "Message deleted",
+        description: "Message has been deleted"
+      });
+    }
+  };
+
+  const handleClearMessages = () => {
+    clearMessages(chatId);
+    toast({
+      title: "Chat cleared",
+      description: "All messages have been cleared"
+    });
+  };
+
+  const handleDeleteChat = () => {
+    deleteChat(chatId);
+    toast({
+      title: "Chat deleted",
+      description: "Chat has been deleted"
+    });
+    onBackClick();
+  };
+
+  const handleToggleMute = () => {
+    toggleMuteChat(chatId);
+    toast({
+      title: chat.muted ? "Chat unmuted" : "Chat muted",
+      description: chat.muted ? "You will now receive notifications" : "Notifications are now muted"
+    });
+  };
+
+  const toggleMessageSelection = (messageId: string) => {
+    if (selectedMessages.includes(messageId)) {
+      setSelectedMessages(prev => prev.filter(id => id !== messageId));
+    } else {
+      setSelectedMessages(prev => [...prev, messageId]);
+    }
+  };
+
+  const handleBulkAction = (action: 'star' | 'delete') => {
+    selectedMessages.forEach(messageId => {
+      if (action === 'star') {
+        starMessage(chatId, messageId);
+      } else if (action === 'delete') {
+        deleteMessage(chatId, messageId);
+      }
+    });
+    
+    toast({
+      title: action === 'star' ? "Messages starred" : "Messages deleted",
+      description: action === 'star' 
+        ? "Selected messages added to starred messages" 
+        : "Selected messages have been deleted"
+    });
+    
+    setSelectedMessages([]);
+    setIsSelectionMode(false);
+  };
+
+  if (!chat) {
+    return <div className={`flex-grow ${theme === 'light' ? 'bg-gray-200' : 'bg-[#222e35]'} flex items-center justify-center`}>Chat not found</div>;
+  }
+
+  const bgColor = theme === 'light' ? 'bg-[#efeae2]' : 'bg-[#0b141a]';
+  const headerBgColor = theme === 'light' ? 'bg-[#f0f2f5]' : 'bg-[#202c33]';
+  const inputBgColor = theme === 'light' ? 'bg-white' : 'bg-[#2a3942]';
+  const textColor = theme === 'light' ? 'text-gray-800' : 'text-[#e9edef]';
+  const secondaryTextColor = theme === 'light' ? 'text-gray-600' : 'text-[#8696a0]';
+  const myMessageBgColor = theme === 'light' ? 'bg-[#d9fdd3]' : 'bg-[#005c4b]';
+  const theirMessageBgColor = theme === 'light' ? 'bg-white' : 'bg-[#202c33]';
+
+  return (
+    <div className={`flex flex-col h-full ${bgColor}`}>
+      {/* Header */}
+      <div className={`flex items-center p-2 ${headerBgColor}`}>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="md:hidden mr-1 text-[#aebac1]"
+          onClick={onBackClick}
+        >
+          <ArrowLeft size={24} />
+        </Button>
+        <div 
+          className="flex items-center flex-1 cursor-pointer"
+          onClick={onShowContactInfo}
+        >
+          <Avatar className="h-10 w-10 mr-3">
+            <AvatarImage src={chat.avatar} alt={chat.name} />
+            <AvatarFallback>{chat.name.substring(0, 2)}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1">
+            <div className={`font-medium ${textColor}`}>{chat.name}</div>
+            <div className={`text-xs ${secondaryTextColor}`}>{chat.online}</div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="rounded-full text-[#aebac1]"
+            onClick={() => handleCall('video')}
+          >
+            <Video size={20} />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="rounded-full text-[#aebac1]"
+            onClick={() => handleCall('audio')}
+          >
+            <Phone size={20} />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="rounded-full text-[#aebac1]"
+            onClick={() => setShowSearch(true)}
+          >
+            <Search size={20} />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full text-[#aebac1]">
+                <MoreVertical size={20} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className={`${theme === 'light' ? 'bg-white text-gray-800' : 'bg-[#233138] text-[#d1d7db]'} border-none`}>
+              <DropdownMenuItem 
+                className={`${theme === 'light' ? 'focus:bg-gray-100' : 'focus:bg-[#182229]'}`}
+                onClick={onShowContactInfo}
+              >
+                Contact info
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className={`${theme === 'light' ? 'focus:bg-gray-100' : 'focus:bg-[#182229]'}`}
+                onClick={() => setIsSelectionMode(true)}
+              >
+                Select messages
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className={`${theme === 'light' ? 'focus:bg-gray-100' : 'focus:bg-[#182229]'}`}
+                onClick={onBackClick}
+              >
+                Close chat
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className={`${theme === 'light' ? 'focus:bg-gray-100' : 'focus:bg-[#182229]'}`}
+                onClick={handleToggleMute}
+              >
+                {chat.muted ? 'Unmute notifications' : 'Mute notifications'}
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className={`${theme === 'light' ? 'focus:bg-gray-100' : 'focus:bg-[#182229]'}`}
+                onClick={handleClearMessages}
+              >
+                Clear messages
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className={`${theme === 'light' ? 'focus:bg-gray-100' : 'focus:bg-[#182229]'}`}
+                onClick={handleDeleteChat}
+              >
+                Delete chat
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+      
+      {/* Selection mode header */}
+      {isSelectionMode && (
+        <div className={`flex items-center p-2 ${headerBgColor}`}>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="mr-1 text-[#aebac1]"
+            onClick={() => {
+              setIsSelectionMode(false);
+              setSelectedMessages([]);
+            }}
+          >
+            <ArrowLeft size={24} />
+          </Button>
+          <div className={`flex-1 ${textColor}`}>
+            {selectedMessages.length} selected
+          </div>
+          <div className="flex gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="rounded-full text-[#aebac1]"
+              onClick={() => handleBulkAction('star')}
+              disabled={selectedMessages.length === 0}
+            >
+              <Star size={20} />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="rounded-full text-[#aebac1]"
+              onClick={() => handleBulkAction('delete')}
+              disabled={selectedMessages.length === 0}
+            >
+              <Trash size={20} />
+            </Button>
+          </div>
+        </div>
+      )}
+      
+      {/* Messages */}
+      <div
+        className="flex-1 overflow-y-auto p-3 bg-repeat"
+        style={{
+          backgroundImage: theme === 'light'\
+            ? "url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAABmJLR0QA/wD/AP+gvaeTAAAA30lEQVRoge3ZMQ6CQBSF4d+YWNjZ2VpZWHgWE2s7T+EFvIW9iYUn8AiexcTSzs7KQhNjgglGdmd2l533JZsQhgfZCQnwRwAAeJVL0kiaS+rUvMdB0lbSKsZ4rvn5AAAAAPAjDZ4jT5IWDZ7dxEHSMsZ4qfPh3FDEpKGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIpqGIp
+
